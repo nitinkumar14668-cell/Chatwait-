@@ -46,20 +46,39 @@ jobs:
         with:
           gradle-version: 9.3.1
 
-      - name: Prepare Signing Keystore
+      - name: Prepare Debug Keystore
+        run: |
+          echo "Setting up debug.keystore..."
+          if [ -f "debug.keystore.base64" ]; then
+            echo "Decoding debug.keystore from debug.keystore.base64..."
+            base64 -d debug.keystore.base64 > debug.keystore
+          else
+            echo "Generating fallback debug.keystore..."
+            keytool -genkeypair -v \
+              -keystore debug.keystore \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass "android" \
+              -keypass "android" \
+              -dname "CN=Android Debug, O=Android, C=US"
+          fi
+          test -f debug.keystore && echo "debug.keystore successfully prepared!"
+
+      - name: Prepare Release Signing Keystore
         id: prepare_keystore
         run: |
           KEYSTORE_FILE="${{ github.workspace }}/my-upload-key.jks"
           
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "Using production keystore from GitHub Secrets..."
+            echo "Using custom production keystore from GitHub Secrets..."
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_FILE"
-            echo "KEYSTORE_EXISTS=true" >> $GITHUB_ENV
             echo "STORE_PASSWORD=${{ secrets.STORE_PASSWORD }}" >> $GITHUB_ENV
             echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
             echo "KEY_ALIAS=${{ secrets.KEY_ALIAS || 'upload' }}" >> $GITHUB_ENV
           else
-            echo "No GitHub Secret keystore found. Generating automatic release keystore..."
+            echo "No custom GitHub Secret found. Generating automated release keystore..."
             keytool -genkeypair -v \
               -keystore "$KEYSTORE_FILE" \
               -alias upload \
@@ -70,7 +89,6 @@ jobs:
               -keypass "androidrelease123" \
               -dname "CN=ChatWait, OU=Mobile, O=AIStudio, L=MountainView, S=CA, C=US"
             
-            echo "KEYSTORE_EXISTS=true" >> $GITHUB_ENV
             echo "STORE_PASSWORD=androidrelease123" >> $GITHUB_ENV
             echo "KEY_PASSWORD=androidrelease123" >> $GITHUB_ENV
             echo "KEY_ALIAS=upload" >> $GITHUB_ENV
@@ -78,7 +96,7 @@ jobs:
           
           echo "KEYSTORE_PATH=$KEYSTORE_FILE" >> $GITHUB_ENV
 
-      - name: Ensure gradlew exists
+      - name: Ensure gradlew is executable
         run: |
           if [ ! -f "gradlew" ]; then
             echo "Generating Gradle wrapper..."
@@ -87,7 +105,7 @@ jobs:
           chmod +x gradlew
 
       - name: Build Debug APK
-        if: ${{ github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'both' || github.event_name != 'workflow_dispatch' }}
+        if: ${{ github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'both' }}
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Build Signed Release APK
@@ -117,6 +135,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload Debug APK
+        if: ${{ github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'both' }}
         uses: actions/upload-artifact@v4
         with:
           name: ChatWait-Debug-APK
