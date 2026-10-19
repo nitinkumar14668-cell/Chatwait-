@@ -1,0 +1,145 @@
+name: Build and Sign Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build Type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - debug
+          - both
+      build_bundle:
+        description: 'Build AAB (App Bundle for Play Store)'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  build:
+    name: Build Signed APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.3.1
+
+      - name: Prepare Signing Keystore
+        id: prepare_keystore
+        run: |
+          KEYSTORE_FILE="${{ github.workspace }}/my-upload-key.jks"
+          
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "Using production keystore from GitHub Secrets..."
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_FILE"
+            echo "KEYSTORE_EXISTS=true" >> $GITHUB_ENV
+            echo "STORE_PASSWORD=${{ secrets.STORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${{ secrets.KEY_ALIAS || 'upload' }}" >> $GITHUB_ENV
+          else
+            echo "No GitHub Secret keystore found. Generating automatic release keystore..."
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE_FILE" \
+              -alias upload \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass "androidrelease123" \
+              -keypass "androidrelease123" \
+              -dname "CN=ChatWait, OU=Mobile, O=AIStudio, L=MountainView, S=CA, C=US"
+            
+            echo "KEYSTORE_EXISTS=true" >> $GITHUB_ENV
+            echo "STORE_PASSWORD=androidrelease123" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=androidrelease123" >> $GITHUB_ENV
+            echo "KEY_ALIAS=upload" >> $GITHUB_ENV
+          fi
+          
+          echo "KEYSTORE_PATH=$KEYSTORE_FILE" >> $GITHUB_ENV
+
+      - name: Ensure gradlew exists
+        run: |
+          if [ ! -f "gradlew" ]; then
+            echo "Generating Gradle wrapper..."
+            gradle wrapper
+          fi
+          chmod +x gradlew
+
+      - name: Build Debug APK
+        if: ${{ github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'both' || github.event_name != 'workflow_dispatch' }}
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Build Signed Release APK
+        if: ${{ github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'both' || github.event_name != 'workflow_dispatch' }}
+        env:
+          KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
+          STORE_PASSWORD: ${{ env.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ env.KEY_ALIAS }}
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Build Release App Bundle (AAB)
+        if: ${{ github.event.inputs.build_bundle == true || github.event_name != 'workflow_dispatch' }}
+        env:
+          KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
+          STORE_PASSWORD: ${{ env.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ env.KEY_ALIAS }}
+        run: ./gradlew bundleRelease --stacktrace
+
+      - name: Upload Signed Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChatWait-Signed-Release-APK
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChatWait-Debug-APK
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload Release AAB (Play Store)
+        if: ${{ github.event.inputs.build_bundle == true || github.event_name != 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChatWait-Release-AAB
+          path: app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Create GitHub Release (On Tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
+          draft: false
+          prerelease: false
+          generate_release_notes: true
