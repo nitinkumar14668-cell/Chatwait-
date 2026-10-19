@@ -11,6 +11,7 @@ import com.example.model.GenerationState
 import com.example.model.ImpressionRecord
 import com.example.model.ImpressionStats
 import com.example.model.MessageSender
+import com.example.model.UserProfile
 import com.example.service.GeminiChatService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -24,9 +25,13 @@ import java.util.UUID
 enum class AppTab(val title: String) {
   CHAT("AI Chat"),
   WEB_COMPANION("Web AI"),
-  CAMPAIGNS("Cards & Ads"),
+  CAMPAIGNS("Wait Cards"),
+  HUB("Hub & Tools")
+}
+
+enum class HubSubTab(val title: String) {
   ANALYTICS("Analytics"),
-  ANALYSIS_BUGS("Analysis & Fixes"),
+  BUG_FIXES("Fixes & Audit"),
   SETTINGS("Settings")
 }
 
@@ -35,8 +40,27 @@ class ChatWaitViewModel(
   private val geminiService: GeminiChatService = GeminiChatService()
 ) : ViewModel() {
 
+  // Authentication State
+  private val _currentUser = MutableStateFlow<UserProfile?>(
+    UserProfile(
+      id = "user_default",
+      name = "Nitin Kumar",
+      email = "nitinkumar14668@gmail.com",
+      avatarInitials = "NK",
+      isProUser = true
+    )
+  )
+  val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
+
+  private val _isLoggedIn = MutableStateFlow(true)
+  val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
+
+  // Navigation State
   private val _currentTab = MutableStateFlow(AppTab.CHAT)
   val currentTab: StateFlow<AppTab> = _currentTab.asStateFlow()
+
+  private val _currentHubSubTab = MutableStateFlow(HubSubTab.ANALYTICS)
+  val currentHubSubTab: StateFlow<HubSubTab> = _currentHubSubTab.asStateFlow()
 
   private val _selectedPlatform = MutableStateFlow(AiPlatform.GEMINI)
   val selectedPlatform: StateFlow<AiPlatform> = _selectedPlatform.asStateFlow()
@@ -47,7 +71,7 @@ class ChatWaitViewModel(
         id = "welcome_msg",
         sender = MessageSender.AI_ASSISTANT,
         model = AiPlatform.GEMINI,
-        content = "Welcome to ChatWait Android! Ask any question to start. While I process and stream responses, the smart ChatWait card will present relevant tips, dev trivia, or sponsor spotlights.",
+        content = "Welcome to ChatWait Studio! Main aapka intelligent AI assistant hoon.\n\nAap code generation (HTML, Kotlin, Python), technical questions ya koi bhi prompt pooch sakte hain. Generation ke time smart ChatWait cards activate honge!",
         timestamp = System.currentTimeMillis()
       )
     )
@@ -79,8 +103,22 @@ class ChatWaitViewModel(
     _currentTab.value = tab
   }
 
+  fun setHubSubTab(subTab: HubSubTab) {
+    _currentHubSubTab.value = subTab
+  }
+
   fun setPlatform(platform: AiPlatform) {
     _selectedPlatform.value = platform
+  }
+
+  fun login(user: UserProfile) {
+    _currentUser.value = user
+    _isLoggedIn.value = true
+    _currentTab.value = AppTab.CHAT
+  }
+
+  fun logout() {
+    _isLoggedIn.value = false
   }
 
   fun sendMessage(prompt: String) {
@@ -111,12 +149,12 @@ class ChatWaitViewModel(
     cardWasClicked = false
     cardWasDismissed = false
 
-    // Select and activate ChatWait Card during generation
+    // Select and activate ChatWait Card during wait time
     val chosenCard = repository.getNextCard(platform)
     _activeWaitCard.value = chosenCard
     currentCardStartTime = System.currentTimeMillis()
 
-    // Start elapsed timer for the wait card
+    // Start timer for the wait card
     waitTimerJob?.cancel()
     waitTimerJob = viewModelScope.launch {
       while (isActive && _isGenerating.value) {
@@ -139,7 +177,6 @@ class ChatWaitViewModel(
           updateAiMessage(aiMsgId, responseBuilder.toString(), GenerationState.STREAMING)
         }
 
-        // Completion
         val finalWaitTime = _elapsedWaitSeconds.value
         updateAiMessage(
           id = aiMsgId,
@@ -164,7 +201,7 @@ class ChatWaitViewModel(
       } catch (e: Exception) {
         updateAiMessage(
           id = aiMsgId,
-          content = "An error occurred while generating response: ${e.message}",
+          content = "Error generating response: ${e.message}",
           state = GenerationState.ERROR
         )
       } finally {
@@ -218,7 +255,7 @@ class ChatWaitViewModel(
 
   fun triggerCardPreview(card: AdCard) {
     _activeWaitCard.value = card
-    _elapsedWaitSeconds.value = 1.8
+    _elapsedWaitSeconds.value = 2.1
     _currentTab.value = AppTab.CHAT
   }
 

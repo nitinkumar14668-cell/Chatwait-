@@ -8,14 +8,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.OpenInBrowser
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -31,11 +30,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.screens.AnalysisBugFixScreen
-import com.example.ui.screens.AnalyticsScreen
+import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.CampaignsScreen
 import com.example.ui.screens.ChatScreen
-import com.example.ui.screens.SettingsScreen
+import com.example.ui.screens.HubScreen
 import com.example.ui.screens.WebCompanionScreen
 import com.example.ui.theme.BrandPrimary
 import com.example.ui.theme.MyApplicationTheme
@@ -51,7 +49,17 @@ class MainActivity : ComponentActivity() {
     enableEdgeToEdge()
     setContent {
       MyApplicationTheme {
-        MainScreen(viewModel = viewModel)
+        val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+
+        if (!isLoggedIn) {
+          AuthScreen(
+            onLoginSuccess = { profile ->
+              viewModel.login(profile)
+            }
+          )
+        } else {
+          MainScreen(viewModel = viewModel)
+        }
       }
     }
   }
@@ -69,13 +77,15 @@ fun MainScreen(viewModel: ChatWaitViewModel) {
   Scaffold(
     bottomBar = {
       NavigationBar(
-        modifier = Modifier.testTag("bottom_navigation_bar")
+        modifier = Modifier
+          .navigationBarsPadding()
+          .testTag("bottom_navigation_bar")
       ) {
         NavigationBarItem(
           selected = currentTab == AppTab.CHAT,
           onClick = { viewModel.setTab(AppTab.CHAT) },
           icon = { Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "AI Chat") },
-          label = { Text("Chat", fontSize = 10.sp) },
+          label = { Text("AI Chat", fontSize = 11.sp) },
           colors = NavigationBarItemDefaults.colors(selectedIconColor = BrandPrimary),
           modifier = Modifier.testTag("nav_chat")
         )
@@ -83,8 +93,8 @@ fun MainScreen(viewModel: ChatWaitViewModel) {
         NavigationBarItem(
           selected = currentTab == AppTab.WEB_COMPANION,
           onClick = { viewModel.setTab(AppTab.WEB_COMPANION) },
-          icon = { Icon(Icons.Default.OpenInBrowser, contentDescription = "Web AI") },
-          label = { Text("Web AI", fontSize = 10.sp) },
+          icon = { Icon(Icons.Default.Language, contentDescription = "Web AI") },
+          label = { Text("Web AI", fontSize = 11.sp) },
           colors = NavigationBarItemDefaults.colors(selectedIconColor = BrandPrimary),
           modifier = Modifier.testTag("nav_web")
         )
@@ -92,37 +102,19 @@ fun MainScreen(viewModel: ChatWaitViewModel) {
         NavigationBarItem(
           selected = currentTab == AppTab.CAMPAIGNS,
           onClick = { viewModel.setTab(AppTab.CAMPAIGNS) },
-          icon = { Icon(Icons.Default.ViewAgenda, contentDescription = "Cards") },
-          label = { Text("Cards", fontSize = 10.sp) },
+          icon = { Icon(Icons.Default.ViewAgenda, contentDescription = "Wait Cards") },
+          label = { Text("Wait Cards", fontSize = 11.sp) },
           colors = NavigationBarItemDefaults.colors(selectedIconColor = BrandPrimary),
           modifier = Modifier.testTag("nav_campaigns")
         )
 
         NavigationBarItem(
-          selected = currentTab == AppTab.ANALYTICS,
-          onClick = { viewModel.setTab(AppTab.ANALYTICS) },
-          icon = { Icon(Icons.Default.BarChart, contentDescription = "Analytics") },
-          label = { Text("Stats", fontSize = 10.sp) },
+          selected = currentTab == AppTab.HUB,
+          onClick = { viewModel.setTab(AppTab.HUB) },
+          icon = { Icon(Icons.Default.Dashboard, contentDescription = "Hub & Tools") },
+          label = { Text("Hub & Tools", fontSize = 11.sp) },
           colors = NavigationBarItemDefaults.colors(selectedIconColor = BrandPrimary),
-          modifier = Modifier.testTag("nav_analytics")
-        )
-
-        NavigationBarItem(
-          selected = currentTab == AppTab.ANALYSIS_BUGS,
-          onClick = { viewModel.setTab(AppTab.ANALYSIS_BUGS) },
-          icon = { Icon(Icons.Default.BugReport, contentDescription = "Bug Fixes") },
-          label = { Text("Fixes", fontSize = 10.sp) },
-          colors = NavigationBarItemDefaults.colors(selectedIconColor = BrandPrimary),
-          modifier = Modifier.testTag("nav_bugs")
-        )
-
-        NavigationBarItem(
-          selected = currentTab == AppTab.SETTINGS,
-          onClick = { viewModel.setTab(AppTab.SETTINGS) },
-          icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-          label = { Text("Config", fontSize = 10.sp) },
-          colors = NavigationBarItemDefaults.colors(selectedIconColor = BrandPrimary),
-          modifier = Modifier.testTag("nav_settings")
+          modifier = Modifier.testTag("nav_hub")
         )
       }
     },
@@ -139,9 +131,7 @@ fun MainScreen(viewModel: ChatWaitViewModel) {
         AppTab.CHAT -> ChatScreen(viewModel = viewModel)
         AppTab.WEB_COMPANION -> WebCompanionScreen(viewModel = viewModel)
         AppTab.CAMPAIGNS -> CampaignsScreen(viewModel = viewModel)
-        AppTab.ANALYTICS -> AnalyticsScreen(viewModel = viewModel)
-        AppTab.ANALYSIS_BUGS -> AnalysisBugFixScreen()
-        AppTab.SETTINGS -> SettingsScreen(viewModel = viewModel)
+        AppTab.HUB -> HubScreen(viewModel = viewModel)
       }
     }
   }

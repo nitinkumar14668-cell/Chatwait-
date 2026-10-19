@@ -86,3 +86,14 @@ data class ImpressionStats(
   val clickThroughRate: Double,
   val platformCounts: Map<AiPlatform, Int>
 )
+
+data class UserProfile(
+  val id: String,
+  val name: String,
+  val email: String,
+  val avatarInitials: String = "AI",
+  val isProUser: Boolean = true,
+  val joinDate: String = "October 2026",
+  val preferredModel: AiPlatform = AiPlatform.GEMINI
+)
+
